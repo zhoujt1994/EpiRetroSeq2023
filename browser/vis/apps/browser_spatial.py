@@ -107,7 +107,6 @@ def get_tsne_scatter_fig(active_data, background_data):
             name='Sample Scatter'
         )
     )
-
     unique_coclusters = set(active_data['cocluster'])
     for cluster in unique_coclusters:
         subset = active_data[active_data['cocluster'] == cluster]
@@ -133,6 +132,7 @@ def get_tsne_scatter_fig(active_data, background_data):
     )
 
     return fig
+
 
 def get_spatial_scatter_fig(spatial_data):
     fig = go.Figure()
@@ -178,7 +178,6 @@ def get_spatial_scatter_fig(spatial_data):
             )
         )
 
-
     fig.update_layout(
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, scaleanchor="y", scaleratio=1),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, scaleanchor="x", scaleratio=1),
@@ -190,59 +189,24 @@ def get_spatial_scatter_fig(spatial_data):
     return fig
 
 
-def get_fig_layout_spatial(tsne_fig_dict, heat_map_fig_dict, spatial_fig_list, per_col_fig):
-    if spatial_fig_list:
-        spatial_fig_list.insert(0, tsne_fig_dict)
-
-    layout_children = []
-
-    first_fig_row = dbc.Row(
-        [
-            dbc.Col(
-                dbc.Card(
+def get_fig_layout_spatial(fig_list):
+    children = []
+    # add card wrapper
+    for fig in fig_list:
+        fig_card = dbc.Card(
+            [
+                dbc.CardHeader(fig['name']),
+                dbc.Container(
                     [
-                        dbc.CardHeader(heat_map_fig_dict['name']),
-                        dbc.Container(
-                            [
-                                heat_map_fig_dict['fig']
-                            ],
-                            className='pt-3'
-                        )
-                    ]
-                ),
-            ),
-        ],
-        className='my-4',
-    )
-    layout_children.append(first_fig_row)
-
-    figs_rows = [spatial_fig_list[i:i + per_col_fig]
-                 for i in range(0, len(spatial_fig_list), per_col_fig)]
-    for fig_row in figs_rows:
-        row_children = []
-        for fig_col in fig_row:
-            col = dbc.Col(
-                [
-                    dbc.Card(
-                        [
-                            dbc.CardHeader(fig_col['name']),
-                            dbc.Container(
-                                [
-                                    fig_col['fig']
-                                ],
-                                className='pt-3'
-                            )
-                        ]
-                    )
-                ],
-                width=12, xl=6
-            )
-            row_children.append(col)
-        row = dbc.Row(row_children, className='my-4')
-        layout_children.append(row)
-
-    layout = html.Div(children=layout_children)
-    return layout
+                        fig['fig']
+                    ],
+                    className='pt-3'
+                )
+            ],
+            style={'display': 'inline-block'},
+        )
+        children.append(fig_card)
+    return children
 
 
 def create_spatial_plot_layout():
@@ -320,16 +284,21 @@ def create_spatial_plot_layout():
         ],
         className="m-auto",
     )
-
-    output_graphs = html.Div(id='output-graphs-spatial')
+    output_graphs_heatmap = html.Div(id='output-graphs-heatmap', children=[],
+                                     style={'padding-bottom': '1px'})
+    output_graphs_others = html.Div(id='output-graphs-spatial', children=[],
+                                    style={'display': 'grid',
+                                           'grid-template-columns': 'repeat(auto-fill, minmax(48%, 1fr))',
+                                           'gap': 5})
     spatial_hidden_mark = html.Div(id='spatial')
     layout = html.Div(children=[
         spatial_hidden_mark,
         spatial_plot_card,
         html.Div(children=[], id='dummy-output'),
         dcc.Store(id='prev-region', data='None'),
+        output_graphs_heatmap,
         dcc.Loading(
-            output_graphs
+            output_graphs_others
         )
     ])
     return layout
@@ -358,6 +327,7 @@ def clear_co_cluster_list(selected_value, prev_value):
 
 
 @app.callback(
+    Output('output-graphs-heatmap', 'children'),
     Output('output-graphs-spatial', 'children'),
     Output('click-to-plot-spatial', 'n_clicks'),
     Input('click-to-plot-spatial', 'n_clicks'),
@@ -369,7 +339,7 @@ def clear_co_cluster_list(selected_value, prev_value):
 )
 def display_graphs(plot_n_clicks, region, sample_list, heat_map_only, pre_region):
     if region != pre_region:
-        return "", dash.no_update
+        return [], [], dash.no_update
 
     if plot_n_clicks:
         # assign color to each selected co-cluster
@@ -379,12 +349,12 @@ def display_graphs(plot_n_clicks, region, sample_list, heat_map_only, pre_region
             color_mapping_dict = dict(zip(co_cluster_list, color_mapping_list))
 
         fig_list = []
-        tsne_fig_dict = None
 
         if 'only' not in heat_map_only:
             active_data, background_data = get_by_co_cluster(region, co_cluster_list)
             tsne_fig = dcc.Graph(figure=get_tsne_scatter_fig(active_data, background_data), id='tsne_fig')
             tsne_fig_dict = {'fig': tsne_fig, 'name': f'TSNE_Region:{region}_Cluster:{co_cluster_list}'}
+            fig_list.append(tsne_fig_dict)
 
         if 'only' in heat_map_only and sample_list:
             sample_list = []
@@ -392,7 +362,17 @@ def display_graphs(plot_n_clicks, region, sample_list, heat_map_only, pre_region
         heat_map_data = load_heat_map_data(region)
         heat_map_fig = dcc.Graph(figure=get_heat_map_fig(heat_map_data), id='heatmap')
         heat_map_fig_dict = {'fig': heat_map_fig, 'name': f'Region:{region}'}
-
+        heat_map_layout = dbc.Card(
+            [
+                dbc.CardHeader(heat_map_fig_dict['name']),
+                dbc.Container(
+                    [
+                        heat_map_fig_dict['fig']
+                    ],
+                    className='pt-3'
+                )
+            ],
+        )
         for sample in sample_list:
             fig_dict = {}
             spatial_data = get_spatial_scatter_data(sample, region, co_cluster_list)
@@ -401,8 +381,8 @@ def display_graphs(plot_n_clicks, region, sample_list, heat_map_only, pre_region
             fig_dict['name'] = f'Sample:{sample}_Region:{region}_Cluster:{co_cluster_list}'
             fig_list.append(fig_dict)
 
-        layout = get_fig_layout_spatial(tsne_fig_dict, heat_map_fig_dict, fig_list, per_col_fig=2)
-        return layout, 0
+        spatial_layout = get_fig_layout_spatial(fig_list)
+        return heat_map_layout, spatial_layout, 0
 
 
 @app.callback(

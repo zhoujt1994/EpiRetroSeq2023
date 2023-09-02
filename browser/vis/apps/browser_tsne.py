@@ -78,7 +78,7 @@ def add_fig_wrapper_to_content(fig_list, graphs_content):
                     className='pt-3'
                 )
             ],
-            style={'width': '49%', 'display': 'inline-block', 'margin': '5px'},
+            style={'display': 'inline-block'},
         )
         graphs_content.append(fig_card)
     return graphs_content
@@ -397,7 +397,8 @@ def create_tsne_plot_layout(coords="T-SNE", down_sample='10000 (Fast)', brain_re
     )
 
     output_graphs = html.Div(id='output-graphs', children=[],
-                             style={'display': 'flex', 'flex-wrap': 'wrap'})
+                             style={'display': 'grid', 'grid-template-columns': 'repeat(auto-fill, minmax(48%, 1fr))',
+                                    'gap': 5})
     tsne_hidden_mark = html.Div(id='tsne')
     layout = html.Div(children=[
         tsne_hidden_mark,
